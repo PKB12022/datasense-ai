@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.env
+
+# MacOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
