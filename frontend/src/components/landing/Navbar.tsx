@@ -31,8 +31,8 @@ export async function Navbar() {
               <Link href="/login" className="text-sm font-medium hover:text-foreground transition-colors">
                 Sign In
               </Link>
-              <Link href="/signup" className={buttonVariants({ variant: "default", className: "rounded-full px-6" })}>
-                Get Started
+              <Link href="/signup" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors">
+                Sign Up
               </Link>
             </>
           )}
