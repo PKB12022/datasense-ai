@@ -6,7 +6,14 @@ import { headers } from 'next/headers'
 
 export async function resetPassword(formData: FormData) {
   const supabase = await createClient()
-  const origin = (await headers()).get('origin')
+  const headersList = await headers()
+  let origin = headersList.get('origin')
+  
+  if (!origin) {
+    const host = headersList.get('host')
+    const protocol = host?.includes('localhost') ? 'http' : 'https'
+    origin = `${protocol}://${host}`
+  }
 
   const email = formData.get('email') as string
 
