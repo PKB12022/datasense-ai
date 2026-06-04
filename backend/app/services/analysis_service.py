@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import io
 import matplotlib
-matplotlib.use('Agg') # Essential for web servers
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
@@ -12,8 +12,6 @@ from typing import Dict, Any, List
 class DataAnalysisService:
     def __init__(self, file_content: bytes, filename: str):
         self.filename = filename
-        
-        # Load into pandas based on extension
         try:
             if filename.endswith(".csv"):
                 self.df = pd.read_csv(io.BytesIO(file_content), on_bad_lines='skip', engine='python', encoding_errors='ignore')
@@ -22,99 +20,180 @@ class DataAnalysisService:
             else:
                 raise ValueError("Unsupported file format")
         except Exception as e:
-            raise ValueError(f"Could not parse data file. Please ensure it is a valid CSV or Excel file. Error: {str(e)}")
+            raise ValueError(f"Could not parse data file. Error: {str(e)}")
 
-    def get_basic_stats(self) -> Dict[str, Any]:
-        """Returns row count, column count, and data types."""
+        # Convert column names to lowercase for easier analysis
+        self.original_columns = self.df.columns.tolist()
+        self.df.columns = self.df.columns.str.lower()
+        
+        self.row_count = len(self.df)
+        self.col_count = len(self.df.columns)
+
+    def get_dataset_profile(self) -> Dict[str, Any]:
+        """Step 1: Dataset Understanding Layer"""
+        profile = {
+            "row_count": self.row_count,
+            "column_count": self.col_count,
+            "columns": self.df.dtypes.astype(str).to_dict(),
+            "missing_values": self.df.isnull().sum().to_dict(),
+            "duplicate_rows": int(self.df.duplicated().sum()),
+            "cardinality": self.df.nunique().to_dict(),
+            "date_columns": [],
+            "outlier_counts": {}
+        }
+        
+        # Detect date columns
+        for col in self.df.columns:
+            if 'date' in col or 'time' in col:
+                profile["date_columns"].append(col)
+                continue
+            # Try to infer datetime
+            if self.df[col].dtype == 'object':
+                try:
+                    pd.to_datetime(self.df[col].dropna().head(10))
+                    profile["date_columns"].append(col)
+                except:
+                    pass
+
+        # Detect outliers using IQR for numerical columns
+        num_cols = self.df.select_dtypes(include=[np.number]).columns
+        for col in num_cols:
+            Q1 = self.df[col].quantile(0.25)
+            Q3 = self.df[col].quantile(0.75)
+            IQR = Q3 - Q1
+            outliers = ((self.df[col] < (Q1 - 1.5 * IQR)) | (self.df[col] > (Q3 + 1.5 * IQR))).sum()
+            profile["outlier_counts"][col] = int(outliers)
+
+        return profile
+
+    def detect_target(self) -> Dict[str, Any]:
+        """Step 3: Target Detection Engine"""
+        target_keywords = ['price', 'churn', 'fraud', 'sales', 'revenue', 'income', 'target', 'label', 'class', 'status', 'approved', 'default', 'attrition']
+        ignore_keywords = ['id', 'uuid', 'guid', 'timestamp', 'date', 'name', 'email', 'phone', 'address']
+        
+        scores = {}
+        for col in self.df.columns:
+            score = 0
+            # Name meaning
+            if any(k in col for k in target_keywords): score += 50
+            if any(k in col for k in ignore_keywords): score -= 100
+            
+            # Cardinality
+            unique_count = self.df[col].nunique()
+            if unique_count == self.row_count: score -= 100 # Identifier
+            if unique_count == 1: score -= 100 # Constant
+            
+            # Binary classification targets are very common
+            if unique_count == 2: score += 30
+            
+            # Numeric targets (regression)
+            if pd.api.types.is_numeric_dtype(self.df[col]) and unique_count > 10:
+                score += 20
+                
+            scores[col] = score
+
+        if not scores:
+            return {"target_column": None, "confidence": "Low", "reasoning": "No valid columns found."}
+
+        best_col = max(scores, key=scores.get)
+        best_score = scores[best_col]
+        
+        if best_score < 0:
+            return {"target_column": None, "confidence": "Low", "reasoning": "No column strongly resembles a target variable."}
+            
+        confidence = "High" if best_score >= 50 else "Medium"
         return {
-            "row_count": int(self.df.shape[0]),
-            "column_count": int(self.df.shape[1]),
-            "columns": self.df.dtypes.astype(str).to_dict()
+            "target_column": best_col,
+            "confidence": confidence,
+            "reasoning": f"Column '{best_col}' scored highest based on naming conventions and cardinality."
         }
 
-    def get_missing_values(self) -> Dict[str, int]:
-        """Returns count of missing values per column."""
-        missing = self.df.isnull().sum()
-        return missing[missing > 0].to_dict()
-
-    def get_descriptive_stats(self) -> Dict[str, Any]:
-        """Returns summary statistics for numerical columns."""
-        numerical_df = self.df.select_dtypes(include=[np.number])
-        if numerical_df.empty:
-            return {}
-            
-        # replace NaN with None for JSON serialization
-        stats = numerical_df.describe().replace({np.nan: None}).to_dict()
-        return stats
-
-    def get_correlation_matrix(self) -> Dict[str, Dict[str, float]]:
-        """Returns the correlation matrix for numerical columns."""
-        numerical_df = self.df.select_dtypes(include=[np.number])
-        if numerical_df.shape[1] < 2:
-            return {}
-            
-        corr_matrix = numerical_df.corr().replace({np.nan: None}).to_dict()
-        return corr_matrix
-
-    def recommend_ml_models(self) -> Dict[str, Any]:
-        """Simple heuristic to recommend ML models based on the dataset."""
-        # Try to guess the target column (last column usually, or specific names)
-        cols = self.df.columns.str.lower()
-        target_candidates = [c for c in cols if c in ['target', 'label', 'class', 'price', 'churn', 'status']]
-        
-        target_col = None
-        if target_candidates:
-            target_col = self.df.columns[cols.get_loc(target_candidates[0])]
-        elif len(self.df.columns) > 1:
-            target_col = self.df.columns[-1]
-
-        if not target_col:
+    def detect_problem_and_models(self, target_col: str, date_cols: List[str]) -> Dict[str, Any]:
+        """Step 4 & 5: Problem Type and Model Recommendation"""
+        if not target_col or target_col not in self.df.columns:
+            if date_cols:
+                return {
+                    "problem_type": "Time Series EDA",
+                    "recommended_models": ["ARIMA", "Prophet", "XGBoost Time Features"],
+                    "reasoning": "No explicit target detected, but date columns suggest temporal analysis."
+                }
             return {
-                "problem_type": "Clustering",
-                "recommended_models": ["K-Means", "DBSCAN", "Hierarchical Clustering"],
-                "reasoning": "No clear target variable was found, suggesting an unsupervised learning problem."
+                "problem_type": "Clustering / Anomaly Detection",
+                "recommended_models": ["KMeans", "DBSCAN", "Isolation Forest", "One Class SVM"],
+                "reasoning": "No target variable detected. Unsupervised learning is appropriate."
             }
 
         target_series = self.df[target_col]
-        
-        # Check if classification or regression
-        if pd.api.types.is_numeric_dtype(target_series):
-            unique_vals = target_series.nunique()
-            if unique_vals < 20: # Likely categorical/classification
-                return {
-                    "problem_type": "Classification",
-                    "target_column": target_col,
-                    "recommended_models": ["Random Forest Classifier", "Logistic Regression", "XGBoost"],
-                    "reasoning": f"The target column '{target_col}' is numerical but has very few unique values ({unique_vals}), indicating a likely classification problem."
-                }
-            else:
-                return {
-                    "problem_type": "Regression",
-                    "target_column": target_col,
-                    "recommended_models": ["Linear Regression", "Random Forest Regressor", "XGBoost Regressor"],
-                    "reasoning": f"The target column '{target_col}' has continuous numerical values, making this a regression problem."
-                }
+        is_numeric = pd.api.types.is_numeric_dtype(target_series)
+        unique_vals = target_series.nunique()
+        is_large_dataset = self.row_count > 10000
+
+        if is_numeric and unique_vals > 20:
+            models = ["XGBoost Regressor", "LightGBM", "CatBoost"] if is_large_dataset else ["Linear Regression", "Random Forest Regressor", "XGBoost Regressor"]
+            return {
+                "problem_type": "Regression",
+                "target_column": target_col,
+                "recommended_models": models,
+                "reasoning": f"Target '{target_col}' is continuous numeric. Using regression models suited for {'large' if is_large_dataset else 'small'} datasets."
+            }
         else:
+            models = ["XGBoost Classifier", "LightGBM Classifier", "Balanced Random Forest"] if is_large_dataset else ["Logistic Regression", "Random Forest Classifier", "XGBoost Classifier"]
             return {
                 "problem_type": "Classification",
                 "target_column": target_col,
-                "recommended_models": ["Random Forest Classifier", "Logistic Regression", "Support Vector Machine"],
-                "reasoning": f"The target column '{target_col}' contains categorical (text) data, which is typical for classification tasks."
+                "recommended_models": models,
+                "reasoning": f"Target '{target_col}' is categorical or has low cardinality ({unique_vals}). Using classification models."
             }
 
+    def get_feature_intelligence(self, target_col: str) -> Dict[str, Any]:
+        """Step 7: Feature Intelligence"""
+        intelligence = {}
+        for col in self.df.columns:
+            if col == target_col:
+                continue
+                
+            unique_count = self.df[col].nunique()
+            missing_pct = self.df[col].isnull().sum() / self.row_count if self.row_count > 0 else 0
+            
+            classification = "Medium Importance"
+            reason = "Standard feature"
+            
+            if unique_count == self.row_count or 'id' in col or 'uuid' in col:
+                classification = "Identifier"
+                reason = "Values are entirely unique; holds no predictive power."
+            elif unique_count == 1:
+                classification = "Noise"
+                reason = "Constant value across all rows."
+            elif missing_pct > 0.5:
+                classification = "Noise"
+                reason = f"Highly sparse ({missing_pct*100:.1f}% missing)."
+            elif pd.api.types.is_numeric_dtype(self.df[col]) and self.df[col].var() == 0:
+                classification = "Noise"
+                reason = "Zero variance."
+                
+            intelligence[col] = {
+                "classification": classification,
+                "reasoning": reason,
+                "missing_pct": f"{missing_pct*100:.1f}%",
+                "unique_count": unique_count
+            }
+        return intelligence
+
+    def get_correlation_matrix(self) -> Dict[str, Dict[str, float]]:
+        num_df = self.df.select_dtypes(include=[np.number])
+        if num_df.shape[1] < 2: return {}
+        return num_df.corr().replace({np.nan: None}).to_dict()
+
     def generate_visualizations(self) -> Dict[str, bytes]:
-        """Dynamically generates relevant charts and returns them as byte streams."""
         visuals = {}
         
-        # 1. Missing Values Bar Chart (if any exist)
+        # 1. Missing Values
         missing = self.df.isnull().sum()
         missing = missing[missing > 0]
         if not missing.empty:
-            if len(missing) > 20:
-                missing = missing.nlargest(20)
             plt.figure(figsize=(8, 3))
             sns.barplot(x=missing.index, y=missing.values, palette="Reds_r")
-            plt.title("Top 20 Missing Values per Column" if len(self.df.columns) > 20 else "Missing Values per Column")
+            plt.title("Missing Values per Column")
             plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
             buf = io.BytesIO()
@@ -122,7 +201,7 @@ class DataAnalysisService:
             plt.close()
             visuals['missing_values_chart'] = buf.getvalue()
             
-        # 2. Correlation Heatmap (if enough numeric columns)
+        # 2. Correlation Heatmap
         num_df = self.df.select_dtypes(include=[np.number])
         if num_df.shape[1] >= 2:
             plt.figure(figsize=(8, 5))
@@ -135,103 +214,34 @@ class DataAnalysisService:
             plt.close()
             visuals['correlation_heatmap'] = buf.getvalue()
             
-        # 3. Boxplots for Outliers (Top 4 numeric columns)
-        if num_df.shape[1] > 0:
-            cols_to_plot = num_df.columns[:4]
-            plt.figure(figsize=(8, 3))
-            for i, col in enumerate(cols_to_plot):
-                plt.subplot(1, len(cols_to_plot), i+1)
-                sns.boxplot(y=self.df[col], color="skyblue")
-                plt.title(col)
-                plt.ylabel("")
-            plt.tight_layout()
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=100)
-            plt.close()
-            visuals['outlier_boxplots'] = buf.getvalue()
-            
-        # 4. Target Distribution & Feature Importance
-        ml_rec = self.recommend_ml_models()
-        target_col = ml_rec.get("target_column")
-        problem_type = ml_rec.get("problem_type")
-        
-        if target_col and target_col in self.df.columns:
-            # Target Distribution
-            plt.figure(figsize=(8, 3))
-            series = self.df[target_col]
-            if pd.api.types.is_numeric_dtype(series) and series.nunique() > 10:
-                sns.histplot(series, kde=True, color="blue")
-                plt.title(f"Distribution of Target: {target_col}")
-            else:
-                # If too many categories, just plot top 20
-                if series.nunique() > 20:
-                    top_categories = series.value_counts().nlargest(20).index
-                    sns.countplot(x=series[series.isin(top_categories)], palette="viridis", order=top_categories)
-                    plt.title(f"Top 20 Classes of Target: {target_col}")
-                else:
-                    sns.countplot(x=series, palette="viridis")
-                    plt.title(f"Class Balance of Target: {target_col}")
+        # 3. Categorical Distributions (Top 2 Categorical columns)
+        cat_df = self.df.select_dtypes(exclude=[np.number])
+        cat_cols = [col for col in cat_df.columns if self.df[col].nunique() < 50 and 'date' not in col and 'time' not in col]
+        if cat_cols:
+            for i, col in enumerate(cat_cols[:2]):
+                plt.figure(figsize=(8, 3))
+                top_cats = self.df[col].value_counts().nlargest(10)
+                sns.barplot(x=top_cats.index, y=top_cats.values, palette="viridis")
+                plt.title(f"Top Categories: {col.title()}")
                 plt.xticks(rotation=45, ha='right')
-            
-            try:
                 plt.tight_layout()
-            except Exception:
-                pass # Ignore if tight layout fails
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', dpi=100)
-            plt.close()
-            visuals['target_distribution'] = buf.getvalue()
-            
-            # Feature Importance using Random Forest
-            try:
-                # Prepare data: drop rows with NaNs in target, fill NaNs in features, encode categoricals
-                df_clean = self.df.dropna(subset=[target_col]).copy()
-                # Subsample data to max 2000 rows for speed
-                if len(df_clean) > 2000:
-                    df_clean = df_clean.sample(n=2000, random_state=42)
-                    
-                X = df_clean.drop(columns=[target_col])
-                y = df_clean[target_col]
-                
-                # Encode target if classification
-                if problem_type == "Classification" and not pd.api.types.is_numeric_dtype(y):
-                    y = LabelEncoder().fit_transform(y)
-                
-                # Fill missing and encode categorical features
-                for col in X.columns:
-                    if pd.api.types.is_numeric_dtype(X[col]):
-                        # Fill numeric NaNs with median, fallback to 0
-                        X[col] = X[col].fillna(X[col].median()).fillna(0)
-                    else:
-                        # Encode all non-numeric (object, string, category)
-                        X[col] = LabelEncoder().fit_transform(X[col].astype(str))
-                        
-                if not X.empty:
-                    model = RandomForestClassifier(n_estimators=50, random_state=42) if problem_type == "Classification" else RandomForestRegressor(n_estimators=50, random_state=42)
-                    model.fit(X, y)
-                    
-                    importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False).head(10)
-                    
-                    plt.figure(figsize=(8, 4))
-                    sns.barplot(x=importances.values, y=importances.index, palette="mako")
-                    plt.title("Feature Importance Ranking")
-                    plt.xlabel("Importance Score")
-                    plt.tight_layout()
-                    buf = io.BytesIO()
-                    plt.savefig(buf, format='png', dpi=100)
-                    plt.close()
-                    visuals['feature_importance'] = buf.getvalue()
-            except Exception as e:
-                print(f"Failed to generate feature importance: {e}")
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', dpi=100)
+                plt.close()
+                visuals[f'cat_dist_{i}'] = buf.getvalue()
             
         return visuals
 
     def run_full_analysis(self) -> Dict[str, Any]:
-        """Runs all analysis pipelines and returns a combined dictionary."""
+        profile = self.get_dataset_profile()
+        target_info = self.detect_target()
+        target_col = target_info.get("target_column")
+        ml_info = self.detect_problem_and_models(target_col, profile["date_columns"])
+        
         return {
-            "basic_stats": self.get_basic_stats(),
-            "missing_values": self.get_missing_values(),
-            "descriptive_stats": self.get_descriptive_stats(),
-            "correlation_matrix": self.get_correlation_matrix(),
-            "ml_recommendation": self.recommend_ml_models()
+            "dataset_profile": profile,
+            "target_detection": target_info,
+            "ml_strategy": ml_info,
+            "feature_intelligence": self.get_feature_intelligence(target_col),
+            "correlation_matrix": self.get_correlation_matrix()
         }
