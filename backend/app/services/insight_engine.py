@@ -9,7 +9,6 @@ class InsightEngine:
         self.analysis_results = analysis_results
 
     def infer_domain(self) -> Dict[str, str]:
-        """Step 2: Domain Inference"""
         cols = " ".join(self.df.columns).lower()
         domain_keywords = {
             "Real Estate": ['price', 'bedroom', 'bathroom', 'area', 'sqft', 'zipcode', 'property'],
@@ -30,32 +29,29 @@ class InsightEngine:
         best_score = scores[best_domain]
         
         if best_score == 0:
-            return {"domain": "General Business Analytics", "confidence": "Low", "reasoning": "No domain-specific keywords detected in column names."}
+            return {"domain": "General Business Analytics", "confidence": "Low (20%)", "reasoning": "No domain-specific keywords detected in column names."}
             
-        confidence = "High" if best_score > 2 else "Medium"
+        confidence_pct = min(99, 50 + (best_score * 10))
+        confidence = f"High ({confidence_pct}%)" if best_score > 2 else f"Medium ({confidence_pct}%)"
         return {
             "domain": best_domain,
             "confidence": confidence,
-            "reasoning": f"Detected {best_score} keywords associated with {best_domain}."
+            "reasoning": f"Detected {best_score} keywords strongly associated with {best_domain}."
         }
 
     def calculate_data_quality(self) -> Dict[str, Any]:
-        """Step 6: Data Quality Intelligence"""
         row_count = len(self.df)
         if row_count == 0: return {"Overall Data Health Score": "0/100"}
         
         profile = self.analysis_results.get("dataset_profile", {})
         total_cells = row_count * profile.get("column_count", 1)
         
-        # Missing values score
         missing_count = sum(profile.get("missing_values", {}).values())
         missing_score = max(0, 100 - (missing_count / total_cells * 100)) if total_cells > 0 else 0
         
-        # Duplicates score
         duplicate_count = profile.get("duplicate_rows", 0)
         uniqueness_score = max(0, 100 - (duplicate_count / row_count * 100))
         
-        # Outlier score
         outlier_count = sum(profile.get("outlier_counts", {}).values())
         outlier_score = max(0, 100 - (outlier_count / total_cells * 100)) if total_cells > 0 else 0
         
@@ -70,9 +66,7 @@ class InsightEngine:
         }
 
     def discover_insights(self) -> List[Dict[str, Any]]:
-        """Step 8: Insight Discovery Engine (Top/Bottom categories, Dominant Segments)"""
         insights = []
-        
         cat_cols = [col for col in self.df.columns if self.df[col].nunique() < 20 and pd.api.types.is_string_dtype(self.df[col])]
         
         for col in cat_cols:
@@ -81,7 +75,6 @@ class InsightEngine:
             
             top_cat = val_counts.index[0]
             top_pct = val_counts.iloc[0]
-            
             bottom_cat = val_counts.index[-1]
             bottom_pct = val_counts.iloc[-1]
             
@@ -98,19 +91,18 @@ class InsightEngine:
                     "finding": f"'{bottom_cat}' is the smallest segment at only {bottom_pct:.1f}%."
                 })
                 
-        # Numeric insights
         num_cols = self.df.select_dtypes(include=[np.number]).columns
         for col in num_cols:
             mean_val = self.df[col].mean()
             max_val = self.df[col].max()
-            if max_val > mean_val * 5: # simple anomaly heuristic
+            if max_val > mean_val * 5 and mean_val > 0:
                 insights.append({
                     "type": "Anomaly Detected",
                     "feature": col,
                     "finding": f"Extreme values detected. Maximum is {max_val:.2f}, which is significantly higher than the average of {mean_val:.2f}."
                 })
                 
-        return insights[:10] # limit to top 10
+        return insights[:10]
 
     def run(self) -> Dict[str, Any]:
         return {

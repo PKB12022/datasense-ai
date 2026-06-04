@@ -48,7 +48,7 @@ class PDFService:
         engine = analysis_results.get('engine_insights', {})
         profile = analysis_results.get('dataset_profile', {})
         target_info = analysis_results.get('target_detection', {})
-        ml = analysis_results.get('ml_strategy', {})
+        mode_info = analysis_results.get('analysis_mode', {})
         dq = engine.get('data_quality_score', {})
         domain = engine.get('domain_inference', {})
         
@@ -77,16 +77,18 @@ class PDFService:
             ('INNERGRID', (0,0), (-1,-1), 1, colors.HexColor("#e5e7eb")),
         ]))
         Story.append(sum_table)
+        Story.append(Spacer(1, 10))
+        Story.append(Paragraph(f"<i>Domain Reasoning: {domain.get('reasoning', '')}</i>", body_style))
         Story.append(Spacer(1, 20))
 
-        # 2. Data Quality & ML Overview
-        dq_data = [
-            ["Data Health", "Missing %", "Target Variable", "Problem Type"],
-            [dq.get("Overall Data Health Score", "N/A"), dq.get("Missing Value Score", "N/A"),
-             target_info.get("target_column", "None"), ml.get("problem_type", "Unknown")]
+        # 2. Analysis Mode & Target
+        mode_data = [
+            ["Analysis Mode", "Mode Confidence", "Target Variable", "Target Confidence"],
+            [mode_info.get("mode", "Unknown"), mode_info.get("confidence", "N/A"),
+             target_info.get("target_column", "None"), target_info.get("confidence", "N/A")]
         ]
-        dq_table = Table(dq_data, colWidths=[120, 120, 120, 120])
-        dq_table.setStyle(TableStyle([
+        mode_table = Table(mode_data, colWidths=[120, 120, 120, 120])
+        mode_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#eff6ff")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#1e40af")),
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
@@ -97,15 +99,18 @@ class PDFService:
             ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#bfdbfe")),
             ('INNERGRID', (0,0), (-1,-1), 1, colors.HexColor("#bfdbfe")),
         ]))
-        Story.append(dq_table)
-        Story.append(Spacer(1, 30))
-
-        # Show top categorical discoveries if any
-        discoveries = engine.get("discovered_insights", [])
-        if discoveries:
-            Story.append(Paragraph("Automated Data Discoveries", h2_style))
-            for disc in discoveries[:4]:
-                Story.append(Paragraph(f"<b>{disc['type']} ({disc['feature']}):</b> {disc['finding']}", insight_style))
+        Story.append(mode_table)
+        Story.append(Spacer(1, 10))
+        Story.append(Paragraph(f"<i>Mode Reasoning: {mode_info.get('reasoning', '')}</i>", body_style))
+        Story.append(Spacer(1, 4))
+        Story.append(Paragraph(f"<i>Target Reasoning: {target_info.get('reasoning', '')}</i>", body_style))
+        Story.append(Spacer(1, 20))
+        
+        # 3. Data Health Overview
+        Story.append(Paragraph("Data Health Overview", h2_style))
+        Story.append(Paragraph(f"<b>Overall Score:</b> {dq.get('Overall Data Health Score', 'N/A')}", body_style))
+        Story.append(Spacer(1, 5))
+        Story.append(Paragraph(dq.get('Explanation', ''), body_style))
 
         Story.append(PageBreak())
         
@@ -113,21 +118,35 @@ class PDFService:
         Story.append(Paragraph("Page 2: Visual Analytics", title_style))
         visuals = analysis_results.get('visuals', {})
         if visuals:
+            # Render numerical dists
+            if 'num_dist_0' in visuals:
+                Story.append(Image(io.BytesIO(visuals['num_dist_0']), width=400, height=150))
+                Story.append(Spacer(1, 10))
+            if 'num_dist_1' in visuals:
+                Story.append(Image(io.BytesIO(visuals['num_dist_1']), width=400, height=150))
+                Story.append(Spacer(1, 10))
+            # Render categorical dists
             if 'cat_dist_0' in visuals:
                 Story.append(Image(io.BytesIO(visuals['cat_dist_0']), width=400, height=150))
                 Story.append(Spacer(1, 10))
             if 'cat_dist_1' in visuals:
                 Story.append(Image(io.BytesIO(visuals['cat_dist_1']), width=400, height=150))
                 Story.append(Spacer(1, 10))
+            # Heatmap
             if 'correlation_heatmap' in visuals:
                 Story.append(Image(io.BytesIO(visuals['correlation_heatmap']), width=400, height=250))
                 Story.append(Spacer(1, 10))
+            # Outliers
+            if 'outlier_boxplots' in visuals:
+                Story.append(Image(io.BytesIO(visuals['outlier_boxplots']), width=450, height=170))
+                Story.append(Spacer(1, 10))
+            # Missing
             if 'missing_values_chart' in visuals:
                 Story.append(Image(io.BytesIO(visuals['missing_values_chart']), width=400, height=150))
 
         Story.append(PageBreak())
             
-        # --- PAGES 3, 4, 5: AI NARRATIVES ---
+        # --- PAGES 3, 4, 5, 6: AI NARRATIVES ---
         ai_insights = analysis_results.get('ai_insights', '')
         if ai_insights:
             for line in ai_insights.split('\n'):
@@ -136,8 +155,8 @@ class PDFService:
                     Story.append(Spacer(1, 4))
                     continue
                 
-                # Check for explicit Page breaks from AI
-                if line.startswith('# Page 4') or line.startswith('# Page 5'):
+                # Dynamic page breaks
+                if line.startswith('# Page 4') or line.startswith('# Page 5') or line.startswith('# Page 6'):
                     Story.append(PageBreak())
                     Story.append(Paragraph(line[2:], title_style))
                     Story.append(Spacer(1, 15))
