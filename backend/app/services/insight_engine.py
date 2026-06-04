@@ -11,12 +11,13 @@ class InsightEngine:
     def infer_domain(self) -> Dict[str, str]:
         cols = " ".join(self.df.columns).lower()
         domain_keywords = {
-            "Real Estate": ['price', 'bedroom', 'bathroom', 'area', 'sqft', 'zipcode', 'property'],
-            "Marketing / Customer Analytics": ['customer', 'acquisition', 'channel', 'signup', 'campaign', 'click'],
-            "Human Resources": ['salary', 'department', 'attrition', 'employee', 'hire', 'role'],
-            "Finance": ['transaction', 'amount', 'merchant', 'credit', 'balance', 'account'],
-            "Healthcare": ['diagnosis', 'symptom', 'patient', 'treatment', 'blood', 'heart'],
-            "E-Commerce / Sales": ['order', 'product', 'shipping', 'discount', 'cart', 'revenue']
+            "Housing Dataset": ['price', 'bedroom', 'bathroom', 'area', 'sqft', 'zipcode', 'property'],
+            "Marketing Dataset": ['campaign', 'click', 'impression', 'conversion', 'ad', 'spend'],
+            "Customer Dataset": ['customer', 'acquisition', 'channel', 'signup', 'churn', 'retention'],
+            "Human Resources Dataset": ['salary', 'department', 'attrition', 'employee', 'hire', 'role'],
+            "Financial Dataset": ['transaction', 'amount', 'merchant', 'credit', 'balance', 'account', 'fraud'],
+            "Healthcare Dataset": ['diagnosis', 'symptom', 'patient', 'treatment', 'blood', 'heart'],
+            "Transactional Sales Dataset": ['order', 'product', 'shipping', 'discount', 'cart', 'revenue', 'sales']
         }
         
         scores = {domain: 0 for domain in domain_keywords}
@@ -29,14 +30,14 @@ class InsightEngine:
         best_score = scores[best_domain]
         
         if best_score == 0:
-            return {"domain": "General Business Analytics", "confidence": "Low (20%)", "reasoning": "No domain-specific keywords detected in column names."}
+            return {"dataset_type": "General Dataset", "confidence": "Low (20%)", "reasoning": "No domain-specific keywords detected in column names."}
             
         confidence_pct = min(99, 50 + (best_score * 10))
         confidence = f"High ({confidence_pct}%)" if best_score > 2 else f"Medium ({confidence_pct}%)"
         return {
-            "domain": best_domain,
+            "dataset_type": best_domain,
             "confidence": confidence,
-            "reasoning": f"Detected {best_score} keywords strongly associated with {best_domain}."
+            "reasoning": f"Detected {best_score} keywords strongly associated with a {best_domain}."
         }
 
     def calculate_data_quality(self) -> Dict[str, Any]:
@@ -106,7 +107,7 @@ class InsightEngine:
 
     def run(self) -> Dict[str, Any]:
         return {
-            "domain_inference": self.infer_domain(),
+            "dataset_type_detection": self.infer_domain(),
             "data_quality_score": self.calculate_data_quality(),
             "discovered_insights": self.discover_insights()
         }

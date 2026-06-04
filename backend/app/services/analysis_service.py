@@ -102,7 +102,7 @@ class DataAnalysisService:
                 "reasoning": f"Best candidate '{best_col}' scored too low ({best_score}). No obvious prediction target detected."
             }
             
-        confidence_pct = min(100, best_score)
+        confidence_pct = min(99, best_score)
         return {
             "target_column": best_col,
             "confidence": f"High ({confidence_pct}%)" if best_score >= 80 else f"Medium ({confidence_pct}%)",

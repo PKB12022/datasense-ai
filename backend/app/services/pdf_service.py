@@ -28,6 +28,18 @@ class PDFService:
         body_style.fontSize = 11
         body_style.leading = 14
         
+        takeaway_style = ParagraphStyle(
+            'Takeaway',
+            parent=body_style,
+            fontSize=12,
+            leading=16,
+            textColor=colors.HexColor("#0f172a"),
+            fontName="Helvetica-Oblique",
+            leftIndent=15,
+            rightIndent=15,
+            spaceAfter=20
+        )
+        
         insight_style = ParagraphStyle(
             'Insight',
             parent=body_style,
@@ -38,6 +50,28 @@ class PDFService:
 
         Story = []
         
+        # Parse AI Insights first to extract the Executive Takeaway for Page 1
+        ai_insights = analysis_results.get('ai_insights', '')
+        exec_takeaway_text = ""
+        remaining_insights = []
+        
+        in_takeaway = False
+        for line in ai_insights.split('\n'):
+            stripped = line.strip()
+            if stripped.startswith('# Page 1: Executive Takeaway'):
+                in_takeaway = True
+                continue
+            if in_takeaway and stripped.startswith('# Page'):
+                in_takeaway = False
+                
+            if in_takeaway:
+                if stripped:
+                    exec_takeaway_text += stripped + " "
+            else:
+                remaining_insights.append(line)
+        
+        ai_insights_rest = "\n".join(remaining_insights)
+
         # --- PAGE 1: EXECUTIVE DASHBOARD ---
         Story.append(Paragraph("<b>DataSense AI</b> | Universal Dataset Intelligence", title_style))
         Story.append(Spacer(1, 10))
@@ -50,13 +84,13 @@ class PDFService:
         target_info = analysis_results.get('target_detection', {})
         mode_info = analysis_results.get('analysis_mode', {})
         dq = engine.get('data_quality_score', {})
-        domain = engine.get('domain_inference', {})
+        dataset_type = engine.get('dataset_type_detection', {})
         
         # 1. Dataset Summary & Domain Detection
         summary_data = [
-            ["Rows", "Columns", "Inferred Domain", "Domain Confidence"],
+            ["Rows", "Columns", "Dataset Type", "Type Confidence"],
             [str(profile.get("row_count", 0)), str(profile.get("column_count", 0)), 
-             domain.get("domain", "Unknown"), domain.get("confidence", "N/A")]
+             dataset_type.get("dataset_type", "Unknown"), dataset_type.get("confidence", "N/A")]
         ]
         
         sum_table = Table(summary_data, colWidths=[120, 120, 120, 120])
@@ -78,7 +112,7 @@ class PDFService:
         ]))
         Story.append(sum_table)
         Story.append(Spacer(1, 10))
-        Story.append(Paragraph(f"<i>Domain Reasoning: {domain.get('reasoning', '')}</i>", body_style))
+        Story.append(Paragraph(f"<i>Dataset Reasoning: {dataset_type.get('reasoning', '')}</i>", body_style))
         Story.append(Spacer(1, 20))
 
         # 2. Analysis Mode & Target
@@ -111,6 +145,13 @@ class PDFService:
         Story.append(Paragraph(f"<b>Overall Score:</b> {dq.get('Overall Data Health Score', 'N/A')}", body_style))
         Story.append(Spacer(1, 5))
         Story.append(Paragraph(dq.get('Explanation', ''), body_style))
+        Story.append(Spacer(1, 20))
+
+        # 4. Executive Takeaway (Injected from AI)
+        if exec_takeaway_text:
+            Story.append(Paragraph("Executive Takeaway", h2_style))
+            exec_takeaway_clean = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', exec_takeaway_text.strip())
+            Story.append(Paragraph(f"\"{exec_takeaway_clean}\"", takeaway_style))
 
         Story.append(PageBreak())
         
@@ -147,9 +188,8 @@ class PDFService:
         Story.append(PageBreak())
             
         # --- PAGES 3, 4, 5, 6: AI NARRATIVES ---
-        ai_insights = analysis_results.get('ai_insights', '')
-        if ai_insights:
-            for line in ai_insights.split('\n'):
+        if ai_insights_rest:
+            for line in ai_insights_rest.split('\n'):
                 line = line.strip()
                 if not line:
                     Story.append(Spacer(1, 4))

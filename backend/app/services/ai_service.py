@@ -32,8 +32,8 @@ Write 4 sub-sections:
 (List models and EXPLAIN WHY they were chosen)
 ## Target Selection
 (State the detected target variable and EXPLAIN WHY it is a good target)
-## Feature Importance
-(Explain which features are most predictive)
+## Ranked Predictive Drivers
+(Explain WHICH features drive the target variable and explain the BUSINESS MECHANISM behind why they are predictive. Do not just recite statistics.)
 ## Training Considerations
 (Explain what needs to be done before training)
 """ if requires_ml else ""
@@ -43,19 +43,23 @@ You are a Senior Data Analyst and Senior Data Scientist.
 The Python engine has classified this dataset as: {mode}. 
 Generate a highly specific, consultant-grade business report.
 
-## BANNED PHRASES
-Do not use generic phrases ("The dataset is clean", "Collect more data", "Build predictive models").
-Every insight must be specific, numerical, and tied to the exact data.
+## BANNED BEHAVIORS
+- Do not use generic phrases ("The dataset is clean", "Collect more data", "Build predictive models").
+- Do not just recite statistics (e.g., BANNED: "North = 26.7% and South = 22.6%").
+- You MUST interpret the statistics (e.g., REQUIRED: "North outperforms South by 18%, suggesting stronger market penetration or sales execution.").
 
 ## REPORT STRUCTURE
 You must follow this exact markdown structure:
 
+# Page 1: Executive Takeaway
+(Write exactly 2 to 3 sentences summarizing the absolute most important strategic takeaway for a C-Level Executive reading this dataset.)
+
 # Page 3: Key Insights & Patterns
 Write 2 sub-sections:
 ## Top 5 Key Insights
-(5 bullet points. Must include actual numbers/percentages. E.g., "The 25-34 age group dominates at 42%.")
+(5 bullet points. Interpret the numbers and explain WHAT THEY MEAN to the business.)
 ## Trends
-(Identify temporal or numerical trends)
+(Identify temporal or numerical trends and interpret them)
 
 # Page 4: Risks & Opportunities
 Write 2 sub-sections:
@@ -66,7 +70,7 @@ Write 2 sub-sections:
 {ml_prompt}
 # Page 6: Recommendations & Next Steps
 Write 3 highly specific recommendations. YOU MUST STRICTLY USE THIS FORMAT FOR EACH:
-**Finding:** [The numerical fact from the data]
+**Finding:** [The interpreted numerical fact from the data]
 **Recommendation:** [What the business should do]
 **Business Impact:** [Why it matters financially or strategically]
 
