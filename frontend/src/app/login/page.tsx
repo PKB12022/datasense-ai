@@ -1,4 +1,4 @@
-import { login, signup } from './actions'
+import { login } from './actions'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
