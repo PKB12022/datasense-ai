@@ -41,6 +41,16 @@ export default async function UpdatePasswordPage({
                 minLength={6}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                minLength={6}
+              />
+            </div>
           </CardContent>
           <CardFooter>
             <button type="submit" className={cn(buttonVariants({ variant: "default" }), "w-full")}>
