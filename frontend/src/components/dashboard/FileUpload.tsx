@@ -53,7 +53,9 @@ export function FileUpload({ usageCount = 0, isOwner = false, maxUsage = 3 }: Fi
     formData.append('file', file)
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/upload/', {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
+      
+      const response = await fetch(`${backendUrl}/api/v1/upload/`, {
         method: 'POST',
         body: formData,
       })
@@ -67,7 +69,7 @@ export function FileUpload({ usageCount = 0, isOwner = false, maxUsage = 3 }: Fi
       
       setUploadStatus('analyzing')
       
-      const analysisResponse = await fetch('http://localhost:8000/api/v1/analysis/run', {
+      const analysisResponse = await fetch(`${backendUrl}/api/v1/analysis/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
