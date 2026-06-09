@@ -52,9 +52,29 @@ export function FileUpload({ usageCount = 0, isOwner = false, maxUsage = 3 }: Fi
     const formData = new FormData()
     formData.append('file', file)
 
+    // Helper: safely parse JSON — returns null if the response is HTML/non-JSON
+    async function safeJson(res: Response): Promise<any> {
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        const text = await res.text()
+        console.error('Non-JSON response from backend:', res.status, text.slice(0, 200))
+        return null
+      }
+      return res.json()
+    }
+
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
-      
+
+      // Sanity check: catch the common mistake of setting this to the Vercel frontend URL
+      if (backendUrl.includes('vercel.app') && !backendUrl.includes('render')) {
+        throw new Error(
+          'Configuration error: NEXT_PUBLIC_BACKEND_URL appears to be set to your Vercel frontend URL. ' +
+          'It should be your Render backend URL (e.g. https://your-app.onrender.com). ' +
+          'Please update this in your Vercel environment variables.'
+        )
+      }
+
       let response: Response
       try {
         response = await fetch(`${backendUrl}/api/v1/upload/`, {
@@ -63,20 +83,26 @@ export function FileUpload({ usageCount = 0, isOwner = false, maxUsage = 3 }: Fi
         })
       } catch (networkError) {
         throw new Error(
-          'Cannot reach the analysis server. Please make sure the backend is running on ' +
-          backendUrl + ' and try again.'
+          `Cannot reach the analysis server at ${backendUrl}. ` +
+          'Check that your Render backend is running and that NEXT_PUBLIC_BACKEND_URL is set correctly in Vercel.'
         )
       }
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || 'Upload failed')
+        const errorData = await safeJson(response)
+        throw new Error(
+          errorData?.detail ||
+          `Upload failed (HTTP ${response.status}). The backend may be starting up — wait 30 seconds and try again.`
+        )
       }
 
-      const result = await response.json()
-      
+      const result = await safeJson(response)
+      if (!result?.unique_filename) {
+        throw new Error('Upload succeeded but the server returned an unexpected response. Please try again.')
+      }
+
       setUploadStatus('analyzing')
-      
+
       let analysisResponse: Response
       try {
         analysisResponse = await fetch(`${backendUrl}/api/v1/analysis/run`, {
@@ -92,8 +118,11 @@ export function FileUpload({ usageCount = 0, isOwner = false, maxUsage = 3 }: Fi
       }
 
       if (!analysisResponse.ok) {
-        const errorData = await analysisResponse.json()
-        throw new Error(errorData.detail || 'Analysis failed')
+        const errorData = await safeJson(analysisResponse)
+        throw new Error(
+          errorData?.detail ||
+          `Analysis failed (HTTP ${analysisResponse.status}). Please try again or contact support.`
+        )
       }
 
       const analysisResult = await analysisResponse.json()
