@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BrainCircuit, FileSpreadsheet, LineChart, ShieldCheck, Sparkles, Zap } from 'lucide-react'
+import { BrainCircuit, FileSpreadsheet, LineChart, ShieldCheck, Sparkles, Zap, Lock, Server, Globe } from 'lucide-react'
 
 const features = [
   {
@@ -17,7 +17,7 @@ const features = [
   },
   {
     title: "AI Model Recommendations",
-    description: "Our engine suggests the best machine learning models for your dataset (Regression vs Classification).",
+    description: "Our engine suggests the best machine learning models for your dataset — Regression or Classification, ranked by fit score.",
     icon: <BrainCircuit className="w-6 h-6 text-blue-500" />,
   },
   {
@@ -31,16 +31,34 @@ const features = [
     icon: <FileSpreadsheet className="w-6 h-6 text-green-500" />,
   },
   {
-    title: "Enterprise Grade Security",
-    description: "Your datasets are processed securely and deleted automatically or stored safely based on your preferences.",
+    title: "Enterprise-Grade Security",
+    description: "Your datasets are processed securely and deleted automatically after analysis. Never stored without your consent.",
     icon: <ShieldCheck className="w-6 h-6 text-rose-500" />,
+  },
+]
+
+const trustPoints = [
+  {
+    icon: <Lock className="w-5 h-5 text-primary" />,
+    title: "Encrypted in Transit",
+    desc: "TLS 1.3 on every request. Your data never travels unprotected.",
+  },
+  {
+    icon: <Server className="w-5 h-5 text-violet-400" />,
+    title: "Processed in Memory",
+    desc: "Datasets are analyzed in-session and auto-deleted after your report is generated.",
+  },
+  {
+    icon: <Globe className="w-5 h-5 text-blue-400" />,
+    title: "GDPR Compliant",
+    desc: "You own your data. Delete it any time with one click, no questions asked.",
   },
 ]
 
 export function Features() {
   return (
     <section id="features" className="py-32 bg-background relative overflow-hidden">
-      {/* Decorative blurred circle */}
+      {/* Decorative blurred circles */}
       <div className="absolute top-1/2 right-0 -translate-y-1/2 translate-x-1/3 w-[600px] h-[600px] bg-violet-600/15 rounded-full blur-[120px] -z-10" />
       <div className="absolute bottom-0 left-0 -translate-y-1/4 -translate-x-1/3 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[100px] -z-10" />
 
@@ -57,7 +75,8 @@ export function Features() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Feature cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
           {features.map((feature, idx) => (
             <motion.div
               key={idx}
@@ -82,6 +101,37 @@ export function Features() {
             </motion.div>
           ))}
         </div>
+
+        {/* Trust & Privacy Strip */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="rounded-2xl border border-white/5 bg-card/20 backdrop-blur-md p-8"
+        >
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-sm font-medium text-green-400 mb-4">
+              <ShieldCheck className="w-4 h-4" />
+              Your data is always safe
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight">Privacy you can actually trust</h3>
+            <p className="text-muted-foreground mt-2 max-w-xl mx-auto">
+              We built DataSense AI with a strict &quot;data minimization&quot; approach. Here&apos;s exactly what happens to your files:
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {trustPoints.map((point, idx) => (
+              <div key={idx} className="flex flex-col gap-2 p-5 rounded-xl bg-background/30 border border-white/5">
+                <div className="flex items-center gap-2.5">
+                  {point.icon}
+                  <span className="font-semibold text-sm">{point.title}</span>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">{point.desc}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </section>
   )

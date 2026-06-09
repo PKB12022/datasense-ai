@@ -229,7 +229,7 @@ class DataAnalysisService:
         missing = missing[missing > 0]
         if not missing.empty:
             plt.figure(figsize=(8, 3))
-            sns.barplot(x=missing.index, y=missing.values, palette="Reds_r")
+            sns.barplot(x=missing.index, y=missing.values, hue=missing.index, palette="Reds_r", legend=False)
             plt.title("Missing Values per Column")
             plt.xticks(rotation=45, ha='right')
             plt.tight_layout()
@@ -289,7 +289,7 @@ class DataAnalysisService:
             for i, col in enumerate(cat_cols[:2]):
                 plt.figure(figsize=(8, 3))
                 top_cats = self.df[col].value_counts().nlargest(5)
-                sns.barplot(x=top_cats.values, y=top_cats.index, palette="viridis") # Horizontal for readability
+                sns.barplot(x=top_cats.values, y=top_cats.index, hue=top_cats.index, palette="viridis", legend=False)  # Horizontal for readability
                 plt.title(f"Top Categories: {col.title()}")
                 plt.tight_layout()
                 buf = io.BytesIO()

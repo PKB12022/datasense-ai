@@ -11,10 +11,15 @@ app = FastAPI(
 )
 
 # CORS configuration
+# Add your Vercel production URL to ALLOWED_ORIGIN env var on Render, e.g.:
+# ALLOWED_ORIGIN=https://datasense-ai.vercel.app
+_extra_origin = os.getenv("ALLOWED_ORIGIN", "")
 origins = [
-    "http://localhost:3000", # Frontend dev server
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+if _extra_origin:
+    origins.append(_extra_origin)
 
 app.add_middleware(
     CORSMiddleware,

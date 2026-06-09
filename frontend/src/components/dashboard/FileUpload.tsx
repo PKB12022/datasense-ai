@@ -55,10 +55,18 @@ export function FileUpload({ usageCount = 0, isOwner = false, maxUsage = 3 }: Fi
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'
       
-      const response = await fetch(`${backendUrl}/api/v1/upload/`, {
-        method: 'POST',
-        body: formData,
-      })
+      let response: Response
+      try {
+        response = await fetch(`${backendUrl}/api/v1/upload/`, {
+          method: 'POST',
+          body: formData,
+        })
+      } catch (networkError) {
+        throw new Error(
+          'Cannot reach the analysis server. Please make sure the backend is running on ' +
+          backendUrl + ' and try again.'
+        )
+      }
 
       if (!response.ok) {
         const errorData = await response.json()
@@ -69,14 +77,19 @@ export function FileUpload({ usageCount = 0, isOwner = false, maxUsage = 3 }: Fi
       
       setUploadStatus('analyzing')
       
-      const analysisResponse = await fetch(`${backendUrl}/api/v1/analysis/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          unique_filename: result.unique_filename,
-          original_filename: result.filename
+      let analysisResponse: Response
+      try {
+        analysisResponse = await fetch(`${backendUrl}/api/v1/analysis/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            unique_filename: result.unique_filename,
+            original_filename: result.filename
+          })
         })
-      })
+      } catch (networkError) {
+        throw new Error('Upload succeeded but the analysis server became unreachable. Please try again.')
+      }
 
       if (!analysisResponse.ok) {
         const errorData = await analysisResponse.json()
